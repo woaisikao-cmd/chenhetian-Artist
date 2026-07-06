@@ -19,15 +19,15 @@
      ============================================================ -->
 <meta property="og:title" content="陈河田 — 青年艺术家">
 <meta property="og:description" content="陈河田，1990年生于福建厦门，青年艺术家，作品色彩浓烈、构图饱满，代表作《魂》《眼》《游离之间》《意蕴》等系列。">
-<meta property="og:image" content="">
-<meta property="og:url" content="">
+<meta property="og:image" content="https://woaisikao-cmd.github.io/chenhetian-Artist/images/site/share-card.webp">
+<meta property="og:url" content="https://woaisikao-cmd.github.io/chenhetian-Artist/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="陈河田艺术作品集">
 <!-- Twitter Card 标签 — 分享到 Twitter/X、Facebook 等平台时显示 -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="陈河田 — 青年艺术家">
 <meta name="twitter:description" content="陈河田，1990年生于福建厦门，青年艺术家，作品色彩浓烈、构图饱满，代表作《魂》《眼》《游离之间》《意蕴》等系列。">
-<meta name="twitter:image" content="">
+<meta name="twitter:image" content="https://woaisikao-cmd.github.io/chenhetian-Artist/images/site/share-card.webp">
 
 <!-- ============================================================
      所有 CSS 内联 — 画廊策展式设计，深炭黑+暖金调
@@ -271,11 +271,6 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 .work-status-badge.sold { background: rgba(21,101,192,0.85); }
 .work-status-badge.exhibition { background: rgba(245,124,0,0.85); }
 .work-status-badge.not_for_sale { background: rgba(97,97,97,0.85); }
-.work-price {
-  display: inline-block; margin-top: var(--space-xs);
-  padding: 3px 10px; background: var(--color-accent); color: #fff;
-  border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 600;
-}
 .work-status-text { font-size: var(--text-xs); color: var(--color-accent); margin-top: var(--space-xs); font-weight: 500; }
 
 /* 收藏按钮 */
@@ -367,6 +362,18 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 .search-box input:focus { outline: none; border-color: var(--color-accent); width: 260px; }
 .search-box input::placeholder { color: var(--color-text-muted); }
 .search-box svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--color-text-muted); }
+
+/* 筛选下拉框（作品分类 / 作品系列） */
+.filter-select {
+  padding: 9px 16px; font-size: var(--text-sm); letter-spacing: 0.04em;
+  color: var(--color-text-secondary); border: 1px solid var(--color-border);
+  border-radius: var(--radius-full); background: var(--color-surface);
+  transition: all var(--transition-base); font-family: var(--font-body);
+  cursor: pointer; min-width: 120px;
+}
+.filter-select:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-text); }
+.filter-select:focus { outline: none; border-color: var(--color-accent); }
+.filter-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---------- 瀑布流 ---------- */
 .masonry { columns: var(--masonry-columns); column-gap: var(--masonry-gap); }
@@ -876,7 +883,10 @@ button { border: none; background: none; cursor: pointer; font-family: inherit; 
 
   <div class="container">
     <div class="filter-bar reveal">
-      <div id="works-filter-buttons"></div>
+      <!-- 作品分类下拉框（默认"全部"） -->
+      <select id="works-category-select" class="filter-select"></select>
+      <!-- 作品系列下拉框（分类为"全部"时禁用；选具体分类后显示该分类下的系列） -->
+      <select id="works-series-select" class="filter-select" disabled></select>
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input type="text" id="search-input" placeholder="搜索作品...">
@@ -1483,6 +1493,73 @@ function renderFilterButtons(containerId, categories, attrName) {
   });
 }
 
+/**
+ * 渲染作品分类下拉框
+ * 小白讲解：主站作品页的分类下拉框选项来自 site.json，切换语言时由 applyLanguageAndRender 重新渲染。
+ * @param {string[]} categories - 分类数组（来自 site.json，包含"全部"）
+ */
+function renderWorksCategorySelect(categories) {
+  var select = document.getElementById('works-category-select');
+  if (!select || !categories || !categories.length) return;
+  select.innerHTML = '';
+  categories.forEach(function(cat) {
+    var opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    select.appendChild(opt);
+  });
+  select.value = currentCategory;
+}
+
+/**
+ * 渲染作品系列下拉框（动态提取自作品数据）
+ * 小白讲解：系列选项不直接用 site.json，而是从当前作品数据里提取，
+ *   这样切换语言时，worksData 的 series 字段已被译文替换，下拉框选项自动跟着变。
+ *   规则：分类为"全部"时禁用下拉框；分类为具体分类时，显示"全部"+该分类下作品的所有系列（去重）。
+ */
+function renderWorksSeriesSelect() {
+  var select = document.getElementById('works-series-select');
+  if (!select) return;
+  select.innerHTML = '';
+
+  if (currentCategory === '全部') {
+    // 分类为"全部"时，禁用系列下拉框，只放一个"全部"占位
+    var opt = document.createElement('option');
+    opt.value = '全部';
+    opt.textContent = '全部';
+    select.appendChild(opt);
+    select.disabled = true;
+    currentSeries = '全部';
+    return;
+  }
+
+  // 从 worksData 提取该分类下所有作品的 series（去重、去空）
+  var seriesSet = [];
+  worksData.forEach(function(w) {
+    if (w.category === currentCategory && w.series && seriesSet.indexOf(w.series) === -1) {
+      seriesSet.push(w.series);
+    }
+  });
+
+  // 第一个固定为"全部"（表示不按系列筛选）
+  var allOpt = document.createElement('option');
+  allOpt.value = '全部';
+  allOpt.textContent = '全部';
+  select.appendChild(allOpt);
+
+  seriesSet.forEach(function(s) {
+    var opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    select.appendChild(opt);
+  });
+
+  select.disabled = false;
+  // 切换分类后系列重置为"全部"（避免选了一个新分类下不存在的系列）
+  currentSeries = '全部';
+  select.value = '全部';
+}
+
 /* ============================================================
  * 多语言（i18n）核心函数
  * 小白讲解：这里实现语言切换的核心逻辑。
@@ -1995,7 +2072,10 @@ function applySiteSettings() {
   // 小白讲解：以前作品集的分类按钮（全部/油画/素描/...）写死在 HTML 里，
   //   现在改成从 site.json 读取，管理员在管理工具里增删分类后，主站刷新就能看到新按钮。
   if (s.categories) {
-    renderFilterButtons('works-filter-buttons', s.categories.works || ['全部'], 'data-category');
+    // 作品页：渲染分类下拉框 + 联动渲染系列下拉框
+    renderWorksCategorySelect(s.categories.works || ['全部']);
+    renderWorksSeriesSelect();
+    // 视频页：保持按钮组不变
     renderFilterButtons('videos-filter-buttons', s.categories.videos || ['全部'], 'data-video-category');
   }
 }
@@ -2025,6 +2105,7 @@ function showDataLoadError(err) {
 
 /* 当前状态 */
 let currentCategory = '全部';
+let currentSeries = '全部';
 let currentSearch = '';
 let lightboxWorks = [];
 let lightboxIndex = 0;
@@ -2145,7 +2226,6 @@ function renderHome() {
     const isFav = isFavorited(w.id);
     // 作品状态角标和文字（小白讲解：根据 status 字段显示不同颜色的标签）
     const st = getStatusInfo(w.status);
-    const showPrice = w.status !== 'not_for_sale' && w.price;
     return `
       <div class="work-card" data-id="${w.id}">
         <div class="work-card-img-wrap">
@@ -2162,7 +2242,6 @@ function renderHome() {
             <span>${w.year}</span>
             <span>${w.material}</span>
           </div>
-          ${showPrice ? `<div class="work-price">💰 ${w.price}</div>` : ''}
         </div>
       </div>
     `;
@@ -2187,6 +2266,10 @@ function filterWorks() {
   let filtered = worksData;
   if (currentCategory !== '全部') {
     filtered = filtered.filter(w => w.category === currentCategory);
+  }
+  // 系列筛选：只有选了具体系列（非"全部"）才过滤
+  if (currentSeries !== '全部') {
+    filtered = filtered.filter(w => w.series === currentSeries);
   }
   if (currentSearch) {
     const kw = currentSearch.toLowerCase();
@@ -2222,7 +2305,6 @@ function renderMasonry() {
     const isFav = isFavorited(w.id);
     // 作品状态角标
     const st = getStatusInfo(w.status);
-    const showPrice = w.status !== 'not_for_sale' && w.price;
     return `
       <div class="masonry-item reveal reveal-delay-${Math.min(idx % 6 + 1, 6)}" data-id="${w.id}">
         <img src="${w.thumbnail || w.image}" alt="${w.title}" loading="lazy" onload="this.classList.add('loaded')">
@@ -2230,7 +2312,6 @@ function renderMasonry() {
         <div class="masonry-item-overlay">
           <h4>${w.title}</h4>
           <p>${w.series} · ${w.year} · ${w.material}</p>
-          ${showPrice ? `<p style="color:var(--color-accent); margin-top:4px; font-weight:600;">💰 ${w.price}</p>` : ''}
         </div>
         <button class="work-fav-btn ${isFav ? 'favorited' : ''}" data-id="${w.id}">
           <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
@@ -2252,15 +2333,24 @@ function renderMasonry() {
 }
 
 function initWorksFilters() {
-  // 分类按钮（小白讲解：用事件委托绑定到父容器，这样动态生成的按钮也能响应点击）
-  const worksFilterContainer = document.getElementById('works-filter-buttons');
-  if (worksFilterContainer) {
-    worksFilterContainer.addEventListener('click', (e) => {
-      const btn = e.target.closest('.filter-btn[data-category]');
-      if (!btn) return;
-      worksFilterContainer.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentCategory = btn.dataset.category;
+  // 分类下拉框 change 事件
+  // 小白讲解：用户选分类时，更新 currentCategory，然后联动重新渲染系列下拉框，
+  //   最后重新渲染瀑布流作品列表。
+  const categorySelect = document.getElementById('works-category-select');
+  if (categorySelect) {
+    categorySelect.addEventListener('change', (e) => {
+      currentCategory = e.target.value;
+      // 切换分类后联动重新渲染系列下拉框（内部会重置 currentSeries 为"全部"）
+      renderWorksSeriesSelect();
+      renderMasonry();
+    });
+  }
+
+  // 系列下拉框 change 事件
+  const seriesSelect = document.getElementById('works-series-select');
+  if (seriesSelect) {
+    seriesSelect.addEventListener('change', (e) => {
+      currentSeries = e.target.value;
       renderMasonry();
     });
   }
@@ -2312,7 +2402,7 @@ function renderLightboxContent() {
     <div class="label">作品信息</div>
     <h3>${work.title}</h3>
     <p><strong>状态：</strong>${statusText}</p>
-    ${showPrice ? `<p style="color: var(--color-accent); font-size: var(--text-lg); font-weight: 600; margin: 8px 0;">💰 ${work.price}</p>` : ''}
+    ${showPrice ? `<p><strong>价格：</strong>${work.price}</p>` : ''}
     <p><strong>系列：</strong>${work.series}</p>
     <p><strong>分类：</strong>${work.category}</p>
     <p><strong>年份：</strong>${work.year}</p>
